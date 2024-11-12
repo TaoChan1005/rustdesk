@@ -411,28 +411,21 @@ jobs:
         with:
           name: rustdesk-unsigned-macos-arm64
           path: rustdesk-${{ env.VERSION }}-arm64.dmg # can not upload the directory directly or tar.gz file, which destroy the link structure, causing the codesign failed
-
-      - name: Custom codesign (if developer certificate is missing)
-        if: env.MACOS_P12_BASE64 == null && env.UPLOAD_ARTIFACT == 'true'
+      
+      - name: Codesign app and create signed dmg
+        if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
         run: |
-          echo "Developer certificate not found, using custom codesign."
-
-          # Step 1: 清理之前的 .dmg 文件，防止命名冲突
-          echo "Removing existing .dmg files if any..."
-          rm -f rustdesk-${{ env.VERSION }}*.dmg
-
-          # 对 RustDesk.app 进行签名，使用自签名方法
-          echo "Signing RustDesk.app..."
-          codesign --force --deep --sign - ./flutter/build/macos/Build/Products/Release/RustDesk.app
-
-          # 创建 dmg 文件
-          echo "Creating .dmg file..."
+          # Patch create-dmg to give more attempts to unmount image
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
-
-          echo "Custom codesign and dmg creation completed."
+          # start sign the rustdesk.app and dmg
+          rm -rf *.dmg || true
+          codesign --force --options runtime -s - --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
+          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
+          codesign --force --options runtime -s - --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
+          # notarize the rustdesk-${{ env.VERSION }}.dmg
+          rcodesign notary-submit --api-key-path ~/.p12/api-key.json  --staple rustdesk-${{ env.VERSION }}.dmg
 
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
