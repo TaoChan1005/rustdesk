@@ -415,18 +415,40 @@ jobs:
       - name: Codesign app and create signed dmg
         if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
         run: |
-          # Patch create-dmg to give more attempts to unmount image
+          echo "Starting codesign and dmg creation process..."
+
+          # Step 1: Patch create-dmg to give more attempts to unmount image
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          # start sign the rustdesk.app and dmg
-          rm -rf *.dmg || true
-          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
-          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
-          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
-          # notarize the rustdesk-${{ env.VERSION }}.dmg
-          rcodesign notary-submit --api-key-path ~/.p12/api-key.json  --staple rustdesk-${{ env.VERSION }}.dmg
 
+          # Step 2: Unlock the keychain
+          echo "Unlocking keychain..."
+          security default-keychain -s rustdesk.keychain
+          security unlock-keychain -p ${{ secrets.MACOS_P12_PASSWORD }} rustdesk.keychain
+
+          # Step 3: Remove any existing .dmg files to avoid conflicts
+          echo "Removing existing .dmg files if any..."
+          rm -f rustdesk-${{ env.VERSION }}*.dmg
+
+          # Step 4: Sign the RustDesk.app with developer certificate
+          echo "Signing RustDesk.app..."
+          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
+
+          # Step 5: Create .dmg file
+          echo "Creating .dmg file..."
+          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
+
+          # Step 6: Sign the .dmg file
+          echo "Signing .dmg file..."
+          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
+
+          # Step 7: Notarize the .dmg file
+          echo "Notarizing .dmg file..."
+          rcodesign notary-submit --api-key-path ${{ github.workspace }}/rustdesk.json --staple rustdesk-${{ env.VERSION }}.dmg
+
+          echo "Codesign and dmg creation process completed."
+          
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
