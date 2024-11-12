@@ -746,6 +746,12 @@ jobs:
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
 
+      - name: Replace FlutterMacOS.framework path
+        if: env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          # 替换 FlutterMacOS.framework 的路径
+          install_name_tool -add_rpath @executable_path/../Frameworks /Applications/RustDesk.app/Contents/MacOS/RustDesk
+
       - name: Upload unsigned macOS app
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: actions/upload-artifact@master
