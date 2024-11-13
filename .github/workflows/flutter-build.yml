@@ -430,17 +430,22 @@ jobs:
       - name: Custom codesign (if developer certificate is missing)
         if: env.MACOS_P12_BASE64 == null || env.UPLOAD_ARTIFACT == 'false'
         run: |
+          # 创建本地证书和私钥
+          openssl req -x509 -newkey rsa:2048 -keyout LocalCertificate.key -out LocalCertificate.crt -days 365 -nodes -subj "/CN=RustDesk Local Certificate"
+      
+          # 将证书导入到系统的 keychain
+          security import LocalCertificate.key -k ~/Library/Keychains/login.keychain-db -P ""
+          security import LocalCertificate.crt -k ~/Library/Keychains/login.keychain-db -P ""
+  
           # Patch create-dmg to give more attempts to unmount image
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
           # start sign the rustdesk.app and dmg
           rm -rf *.dmg || true
-          codesign --force --options runtime -s - --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
+          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
-          codesign --force --options runtime -s - --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
-          # notarize the rustdesk-${{ env.VERSION }}.dmg
-          rcodesign notary-submit --api-key-path ~/.p12/api-key.json  --staple rustdesk-${{ env.VERSION }}.dmg
+          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
 
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -789,17 +794,22 @@ jobs:
       - name: Custom codesign (if developer certificate is missing)
         if: env.MACOS_P12_BASE64 == null || env.UPLOAD_ARTIFACT == 'false'
         run: |
-          echo "Developer certificate not found, or upload artifact is set to false. Using custom codesign."
+          # 创建本地证书和私钥
+          openssl req -x509 -newkey rsa:2048 -keyout LocalCertificate.key -out LocalCertificate.crt -days 365 -nodes -subj "/CN=RustDesk Local Certificate"
+      
+          # 将证书导入到系统的 keychain
+          security import LocalCertificate.key -k ~/Library/Keychains/login.keychain-db -P ""
+          security import LocalCertificate.crt -k ~/Library/Keychains/login.keychain-db -P ""
+  
           # Patch create-dmg to give more attempts to unmount image
           CREATE_DMG="$(command -v create-dmg)"
           CREATE_DMG="$(readlink -f "$CREATE_DMG")"
           sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          # 自签名 RustDesk.app
-          codesign --force --options runtime -s - --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
-          # 创建 dmg 文件
+          # start sign the rustdesk.app and dmg
+          rm -rf *.dmg || true
+          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
           create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
-          # 自签名 dmg 文件
-          codesign --force --options runtime -s - --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
+          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
 
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
