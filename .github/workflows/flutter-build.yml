@@ -446,25 +446,29 @@ jobs:
           # notarize the rustdesk-${{ env.VERSION }}.dmg
           rcodesign notary-submit --api-key-path ~/.p12/api-key.json  --staple rustdesk-${{ env.VERSION }}.dmg
       - name: Custom codesign (if developer certificate is missing)
-
         if: env.MACOS_P12_BASE64 == null || env.UPLOAD_ARTIFACT == 'false'
         run: |
           # 创建本地证书和私钥
           openssl req -x509 -newkey rsa:2048 -keyout LocalCertificate.key -out LocalCertificate.crt -days 365 -nodes -subj "/CN=RustDesk Local Certificate"
       
-          # 将证书导入到系统的 keychain
+          # 导入证书和私钥
           security import LocalCertificate.key -k ~/Library/Keychains/login.keychain-db -P ""
           security import LocalCertificate.crt -k ~/Library/Keychains/login.keychain-db -P ""
-  
-          # Patch create-dmg to give more attempts to unmount image
+      
+          # 将证书设为信任并给codesign使用
+          security add-trusted-cert -d -r trustRoot -k ~/Library/Keychains/login.keychain-db LocalCertificate.crt
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/login.keychain-db
+      
+          # Patch create-dmg
           CREATE_DMG="$(command -v create-dmg)"
-          CREATE_DMG="$(readlink -f "$CREATE_DMG")"
-          sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          # start sign the rustdesk.app and dmg
+          CREATE_DMG="$(realpath "$CREATE_DMG")"
+          sed -i '' -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
+      
+          # 签名应用和dmg
           rm -rf *.dmg || true
           codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
-          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
-          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
+          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 "rustdesk-${{ env.VERSION }}.dmg" ./flutter/build/macos/Build/Products/Release/RustDesk.app
+          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict "rustdesk-${{ env.VERSION }}.dmg" -vvv
 
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
@@ -843,19 +847,24 @@ jobs:
           # 创建本地证书和私钥
           openssl req -x509 -newkey rsa:2048 -keyout LocalCertificate.key -out LocalCertificate.crt -days 365 -nodes -subj "/CN=RustDesk Local Certificate"
       
-          # 将证书导入到系统的 keychain
+          # 导入证书和私钥
           security import LocalCertificate.key -k ~/Library/Keychains/login.keychain-db -P ""
           security import LocalCertificate.crt -k ~/Library/Keychains/login.keychain-db -P ""
-  
-          # Patch create-dmg to give more attempts to unmount image
+      
+          # 将证书设为信任并给codesign使用
+          security add-trusted-cert -d -r trustRoot -k ~/Library/Keychains/login.keychain-db LocalCertificate.crt
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" ~/Library/Keychains/login.keychain-db
+      
+          # Patch create-dmg
           CREATE_DMG="$(command -v create-dmg)"
-          CREATE_DMG="$(readlink -f "$CREATE_DMG")"
-          sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          # start sign the rustdesk.app and dmg
+          CREATE_DMG="$(realpath "$CREATE_DMG")"
+          sed -i '' -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
+      
+          # 签名应用和dmg
           rm -rf *.dmg || true
           codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
-          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
-          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
+          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 "rustdesk-${{ env.VERSION }}.dmg" ./flutter/build/macos/Build/Products/Release/RustDesk.app
+          codesign --force --options runtime -s "RustDesk Local Certificate" --deep --strict "rustdesk-${{ env.VERSION }}.dmg" -vvv
 
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
